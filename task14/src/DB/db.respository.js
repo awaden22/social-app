@@ -1,0 +1,60 @@
+export async function findOne(
+  model,
+  filter = {},
+  select = "",
+  populate = "false",
+  populateField = "",
+) {
+  let result;
+  if (populate) {
+    result = await model.findOne(filter).select(select).populate(populateField);
+  } else {
+    result = await model.findOne(filter).select(select);
+  }
+  return result;
+}
+
+export async function find(
+  model,
+  filter = {},
+  select = "",
+  populate = "false",
+  populateField = "",
+) {
+  let result;
+  if (populate) {
+    result = await model.find(filter).select(select).populate(populateField);
+  } else {
+    result = await model.find(filter).select(select);
+  }
+  return result;
+}
+
+export async function create(model, insertData, option = {}) {
+  const [result] = await model.create([insertData], option);
+  return result;
+}
+export async function findById(
+  model,
+  id,
+  select = "",
+  populate = "false",
+  populateField = "",
+) {
+  let result;
+  if (populate) {
+    result = await model.findById(id).select(select).populate(populateField);
+  } else {
+    result = await model.findById(id).select(select);
+  }
+  return result;
+}
+export async function updateOne({ model, filter, data }) {
+  const result = await model.updateOne(filter, data);
+  return result;
+}
+  
+export async function deleteOne(model,filter){
+  const result = await model.deleteOne(filter);
+  return result;
+}
