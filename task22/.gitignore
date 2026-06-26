@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.env.*
+front/node_modules
+task22/node_modules
+front/firebase/*.json
