@@ -81,8 +81,21 @@ export const updatePostSchema = {
       }
     }),
 };
+export const reactionSchema = {
+  query: z.object({
+    react: z.coerce.number()
+  })
+}
 export const likeandDislikeSchema = {
   query: z.object({
     react: z.coerce.number()
   })
 }
+
+export const NewsFeedSchema = {
+  query: z.object({
+    size: z.coerce.number().min(1).max(50).default(10),
+    page: z.coerce.number().min(1).default(1),
+    search: z.string().optional(),
+  }),
+};

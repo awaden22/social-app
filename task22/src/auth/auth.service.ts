@@ -32,7 +32,7 @@ class AuthService {
   private _redisMethods = redisServices;
   private _notification = notificationService;
 
-  constructor() {}
+  constructor() { }
   public async signup(bodydata: SignupDto) {
     const { email } = bodydata;
     const isEmail = await this._userRepo.findOne({
@@ -56,6 +56,7 @@ class AuthService {
 
     return user!;
   }
+
   async confirmEmail(bodydata: ConfirmEmailDto) {
     const { email, otp } = bodydata;
     const user = await this._userRepo.findOne({
@@ -90,19 +91,34 @@ class AuthService {
     user.confirmEmail = true;
 
     await user.save();
+    await this._redisMethods.del(
+      this._redisMethods.getOTPkey(email, emailEnums.confirmEmail)
+    );
   }
 
   async resendConfirmEmailOtp(bodydata: ResendConfirmEmailDto) {
     const { email } = bodydata;
+    const user = await this._userRepo.findOne({
+      filter: { email },
+    });
+
+    if (!user) {
+      throw new NotFoundException("Email not found");
+    }
+
+    if (user.confirmEmail) {
+      throw new BadRequestException("Email already verified");
+    }
+
     await this._emailService.sendOtpEmail({
       email,
       emailType: emailEnums.confirmEmail,
       subject: "confirm",
     });
   }
+
   async sendOtpForgetPassword(bodydata: ForgetPasswordDto) {
-    console.log("BODYDATA =>", bodydata);
-    console.log("EMAIL =>", bodydata.email);
+
 
     const { email } = bodydata;
     const user = await this._userRepo.findOne({
@@ -145,20 +161,39 @@ class AuthService {
     await this.verifyOtpForgetPassword({ email, otp });
     await this._userRepo.updateOne({
       filter: { email },
-      update: { password: await hashOperation({ plainText: newPassword }) },
+      update: {
+        password: await hashOperation({ plainText: newPassword }),
+        changeCreditTime: Date.now(),
+
+      },
     });
+    await this._redisMethods.del(
+      this._redisMethods.getOTPkey(email, emailEnums.forgetPassword)
+    )
   }
 
   async resendForgetPasswordOtp(bodydata: ResendConfirmEmailDto) {
     const { email } = bodydata;
+    const user = await this._userRepo.findOne({
+      filter: { email },
+    });
+
+    if (!user) {
+      throw new NotFoundException("Email not found");
+    }
+
+    if (!user.confirmEmail) {
+      throw new BadRequestException("first confirm email");
+    }
     await this._emailService.sendOtpEmail({
       email,
       emailType: emailEnums.forgetPassword,
       subject: "reset password",
     });
   }
+
   async login(bodydata: LoginDto) {
-    const { email, password ,FCM} = bodydata;
+    const { email, password, FCM } = bodydata;
     const user = await this._userRepo.findOne({
       filter: { email },
     });
@@ -178,15 +213,19 @@ class AuthService {
     if (!isPassword) {
       throw new BadRequestException("password is not valid");
     }
-    if (bodydata.FCM) {
-      await this._redisMethods.addFcmTokenToset(user._id, bodydata.FCM);
+    await this._redisMethods.addActiveUser(user._id);
+    if (FCM) {
+      await this._redisMethods.addFcmTokenToset(user._id, FCM);
       const tokens = await this._redisMethods.getMemberFcmToken(user._id);
       await this._notification.sendNotifications({
         tokens,
         data: { title: "user log in", body: "user logged" },
       });
     }
-    return await this._token.generateAceessTokenAndRefreshToken(user);
+   return {
+    status: 200,
+    result: await this._token.generateAceessTokenAndRefreshToken(user),
+  };
   }
 
   async verifyGoogleToken(idToken: string) {
@@ -197,7 +236,7 @@ class AuthService {
     });
     const payload = ticket.getPayload();
 
-    console.log(payload);
+   
     return payload;
   }
 
@@ -221,14 +260,20 @@ class AuthService {
     const user = await this._userRepo.findOne({
       filter: {
         email: payloadGoogleToken.email as string,
-        Provider: ProivderEnum.Google,
+      
       },
     });
 
     if (!user) {
       return this.signupWithGoogle(idToken);
     }
-
+    if (user.Provider === ProivderEnum.System) {
+  throw new BadRequestException(
+    "This email is registered with email/password")
+  }
+  
+   await this._redisMethods.addActiveUser(user._id); 
+   
     return {
       status: 200,
       result: await this._token.generateAceessTokenAndRefreshToken(user),
@@ -255,17 +300,18 @@ class AuthService {
     const user = await this._userRepo.findOne({
       filter: {
         email: payloadGoogleToken.email as string,
-        Provider: ProivderEnum.Google,
+ 
       },
     });
 
     if (user) {
       if (user.Provider === ProivderEnum.System) {
-        throw new BadRequestException("account already exist");
+        throw new BadRequestException("This email is registered with email/password");
       }
 
       return this.loginWithGoogle(idToken);
     }
+
 
     const createdUser = await this._userRepo.create({
       data: {
@@ -284,12 +330,12 @@ class AuthService {
       throw new BadRequestException("User creation failed");
     }
 
-    return {
-      status: 201,
-      result: await this._token.generateAceessTokenAndRefreshToken(
-        newUser as IHUser,
-      ),
-    };
+    await this._redisMethods.addActiveUser(newUser._id);
+
+   return {
+  status: 201,
+  result: await this._token.generateAceessTokenAndRefreshToken(newUser as IHUser),
+};
   }
 }
 

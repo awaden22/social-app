@@ -9,8 +9,8 @@ class PostResolver{
         validationGQL(reactPostSchema,args)
         const result = await this._postService.likeorDisklikePost(args.postId,args.react,context.user)
         return {
-            _id:result._id,
-            likes:result.likes
+            _id: result._id,
+            likes: (result as any).likes
         }
 
     }

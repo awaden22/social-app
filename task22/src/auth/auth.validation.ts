@@ -14,7 +14,7 @@ export const signupSchema = {
   body: loginSchema.body
     .extend({
       userName: commonValidationFields.userName,
-
+      
       confirmPassword: z.string(),
       age: commonValidationFields.age.optional(),
       gender: commonValidationFields.gender.optional(),

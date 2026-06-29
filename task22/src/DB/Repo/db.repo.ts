@@ -2,16 +2,19 @@ import type {
   CreateOptions,
   HydratedDocument,
   HydrateOptions,
+
   Model,
   ProjectionType,
   QueryFilter,
   QueryOptions,
   Types,
   UpdateQuery,
+
+
 } from "mongoose";
 
 abstract class DBRepo<T> {
-  constructor(protected Model: Model<T>) {}
+  constructor(protected Model: Model<T>) { }
   public async create({
     data,
     options,
@@ -109,6 +112,31 @@ abstract class DBRepo<T> {
   }) {
     return this.Model.findOneAndUpdate(filter, update, options);
   }
+  public async deleteOne({
+    filter
+
+  }: {
+    filter?: QueryFilter<T>;
+
+  }) {
+    return this.Model.deleteOne(filter);
+  }
+  public async deleteMany({
+    filter
+
+  }: {
+    filter?: QueryFilter<T>;
+
+  }) {
+    return this.Model.deleteMany(filter);
+  }
+
+  public async allCount(filter = {}) {
+    return this.Model.countDocuments(filter);
+  }
+
+
+
 }
 
 export default DBRepo;

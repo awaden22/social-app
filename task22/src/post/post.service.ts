@@ -1,6 +1,6 @@
 
 import { Types } from "mongoose";
-import type { CreatePostDto, FindPostDto, UpdatePostDto } from "./post.dto.js";
+import type { CreatePostDto, FindPostDto, NewsFeedDto, UpdatePostDto } from "./post.dto.js";
 import userRepo from "../DB/Repo/user.repo.js";
 import {
   BadRequestException,
@@ -14,12 +14,18 @@ import { PostPrivacyEnum } from "../common/enums/post.enums.js";
 import type { IHUser } from "../DB/Models/user.Models.js";
 import { populate } from "dotenv";
 
+import commentRepo from "../DB/Repo/comment.repo.js";
+import type { ReactionEnums } from "../common/enums/reactions.enums.js";
+
 class PostServices {
+
   private _userRepo = userRepo;
   private _redisService = redisServices;
   private _notification = notificationService;
   private _postRepo = postRepo;
   private _s3Buket = s3BuketService;
+  private _comment = commentRepo;
+
 
   async createPost(
     bodydata: any,
@@ -69,6 +75,7 @@ class PostServices {
     post.createBy = userId as Types.ObjectId;
     return await this._postRepo.saveDBDoc(post);
   }
+
   async findPost(user: IHUser, queryData: FindPostDto) {
     const searchQuery = queryData.search?.length
       ? { content: { $regex: queryData.search, $options: "i" } }
@@ -77,16 +84,16 @@ class PostServices {
       filter: {
         $or: await this._postRepo.checkUserPrivacy(user),
         ...searchQuery,
-        
+
       },
       page: queryData.page as number,
       size: queryData.size as number,
-       options:{
-        populate:[{
-          path:"comments",
-          populate:{path:"commentId"}
-       }],
-      
+      options: {
+        populate: [{
+          path: "comments",
+          populate: { path: "commentId" }
+        }],
+
       },
     });
   }
@@ -199,35 +206,189 @@ class PostServices {
       },
     });
 
-    console.log(updatedPost);
+    return updatedPost;
   }
 
-  async likeorDisklikePost(postId: Types.ObjectId | string, react: number|string, user: IHUser) {
+  async likeorDisklikePost(postId: Types.ObjectId | string, react: number | string, user: IHUser) {
 
-    const updateQuery = 
-      react == 1 
-      ?{ $addToSet: { likes: user._id } } 
-      : { $pull: {likes: user._id}
-      }
+    const updateQuery =
+      react == 1
+        ? { $addToSet: { likes: user._id } }
+        : {
+          $pull: { likes: user._id }
+        }
 
     const post = await this._postRepo.findandUpdate({
       filter: {
         _id: postId,
         $or: await this._postRepo.checkUserPrivacy(user)
       },
-      update:updateQuery
+      update: updateQuery
       ,
-      options:{
-       
-        returnDocument:"after"
+      options: {
+
+        returnDocument: "after"
       }
     })
-    if(!post){
-    throw new NotFoundException("no found post")
-  }
+    if (!post) {
+      throw new NotFoundException("no found post")
+    }
     return post
   }
-  
+
+  async deletePost(postId: Types.ObjectId | string, user: IHUser) {
+    const post = await this._postRepo.findById({
+      id: postId,
+    });
+
+    if (!post) {
+      throw new NotFoundException("Post not found");
+    }
+
+    if (post.createBy.toString() !== user._id.toString()) {
+      throw new BadRequestException("You are not authorized to delete this post");
+    }
+    if (post.attachment?.length) {
+      await this._s3Buket.deleteFile(
+        post.attachment.map((key) => ({ key })
+        )
+      )
+    }
+    const comments = await this._comment.find({
+  filter: {
+    postId: post._id,
+  },
+});
+
+const attachments = comments.flatMap(
+  (comment) => comment.attachment ?? []
+);
+
+if (attachments.length) {
+  await this._s3Buket.deleteFile(
+    attachments.map((key) => ({ key }))
+  );
+}
+
+    await this._comment.deleteMany({
+      filter: {
+        postId: post._id
+      },
+
+    })
+
+    await this._postRepo.deleteOne({
+      filter: {
+        _id: postId
+      }
+    })
+    return {
+      message: "Post deleted successfully"
+    }
+
+
+
+  }
+
+  async reactPost(
+    postId: Types.ObjectId | string,
+    react: ReactionEnums,
+    user: IHUser,
+  ) {
+    const post = await this._postRepo.findById({
+      id: postId,
+    });
+
+    if (!post) {
+      throw new NotFoundException("Post not found");
+    }
+
+    const reactionIndex = post.reactions.findIndex(
+      (item) => item.userId.toString() === user._id.toString()
+    );
+
+    // أول مرة يعمل React
+    if (reactionIndex === -1) {
+      post.reactions.push({
+        userId: user._id,
+        reaction: react,
+      });
+    } else {
+      const reaction = post.reactions[reactionIndex];
+      // نفس الـ React => يشيله
+      if (reaction?.reaction === react) {
+        post.reactions.splice(reactionIndex, 1);
+      } else if (reaction) {
+        // يغير الـ React
+        reaction.reaction = react;
+      }
+    }
+
+    await post.save();
+
+    return post;
+  }
+  async profilePosts(user: IHUser) {
+    const result = await this._postRepo.find({
+      filter: {
+        $or: [
+          { createBy: user._id },
+          { tags: user._id }
+        ]
+      },
+      options: {
+        populate: [
+          {
+            path: "comments",
+            match: {
+              commentId: { $exists: false }
+            },
+            populate: [{
+              path: "replies"
+            }]
+          },
+
+        ]
+      }
+    })
+
+    if (!result.length) {
+      throw new NotFoundException("post not found")
+    }
+    return result
+  }
+
+  async newsFeed(user: IHUser, query: NewsFeedDto) {
+    const page: number = query.page ?? 1;
+    const size: number = query.size ?? 10;
+    return await this._postRepo.paginate({
+      filter: {
+        $or: await this._postRepo.checkUserPrivacy(user),
+      },
+      page,
+      size,
+      options: {
+        sort: {
+          createdAt: -1,
+        },
+        populate: [
+          {
+            path: "createBy",
+            select: "userName profilePics",
+          },
+          {
+            path: "comments",
+            match: {
+              commentId: { $exists: false },
+            },
+            populate: {
+              path: "replies",
+            },
+          },
+        ],
+      },
+    });
+  }
 
 }
 

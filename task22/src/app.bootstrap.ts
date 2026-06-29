@@ -19,6 +19,8 @@ import schema from "./gql/schema.gql.js";
 import { authentication } from "./Middlewares/authentication.middleware.js";
 import realtimeGateway from "./realtime/realtime.gateway.js";
 import chatController from "./chat/chat.controller.js";
+import dashboardController from "./admin/dashboard.controller.js";
+import storyController from "./story/story.controller.js";
 async function bootstrap() {
   const port = SERVER_PORT;
   const app: express.Express = express();
@@ -34,6 +36,9 @@ async function bootstrap() {
   app.use("/post", postController);
   app.use("/comment", commentController)
   app.use("/chat",chatController)
+  app.use("/dashboard",dashboardController) 
+  app.use("/story",storyController)
+  
   app.all("/graphql", 
     authentication(),
     createHandler({ schema:schema,context:(req)=>({user:req.raw.user,token:req.raw.Payload})}))

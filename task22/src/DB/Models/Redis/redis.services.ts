@@ -47,6 +47,9 @@ class RedisService {
   async persist(key: string) {
     return await client.persist(key);
   }
+  async countSet(key:string): Promise<number>{
+    return await client.sCard(key)
+  }
 
   async update(
     key: string,
@@ -118,6 +121,16 @@ class RedisService {
   async getMemberSocketIoIds(userId:Types.ObjectId|string){
     return await client.sMembers(this.getSocketTOKey(userId))
   }
+  async removeFcmToken(userId: Types.ObjectId | string, token: string) {
+  return await client.sRem(this.getFcmKey(userId), token);
+}
+async addActiveUser(userId: Types.ObjectId | string) {
+  return  client.sAdd("active:users", userId.toString());
+  
+}
+async removeActiveUser(userId: string) {
+  return client.sRem("active:users", userId.toString());
+}
 }
 
 export default new RedisService();

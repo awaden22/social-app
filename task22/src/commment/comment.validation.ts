@@ -44,3 +44,32 @@ export const createCommentSchema = {
       }
     }),
 };
+export const updateCommentSchema = {
+  body: z
+    .object({
+      content: z.string().min(5).max(1000).optional(),
+      files: z.array(z.any()).optional(),
+
+      tags: z.array(commonValidationFields.id).optional(),
+     
+    })
+    .superRefine((arg, ctx) => {
+      if (!arg.files?.length && !arg.content?.length) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["content"],
+          message: "you should add files or content",
+        });
+      }
+      if (arg.tags) {
+        const uniqueTags = [...new Set(arg.tags)];
+        if (uniqueTags.length != arg.tags.length) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["tags"],
+            message: "duplicated values",
+          });
+        }
+      }
+    }),
+};

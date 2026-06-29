@@ -3,7 +3,7 @@ import { authentication } from "../Middlewares/authentication.middleware.js";
 import { successResponse } from "../common/response/success.response.js";
 import userService from "./user.service.js";
 import { validation } from "../Middlewares/validation.middleware.js";
-import logoutSchema from "./user.validation.js";
+import logoutSchema, { updateProfileUserSchema } from "./user.validation.js";
 
 import cloudFileUpload from "../multer/multer.config.js";
 import { StorgeApproachEnum } from "../common/enums/multer.enums.js";
@@ -11,9 +11,9 @@ import { Bucket_Name } from "../config/config.service.js";
 import chatController from "../chat/chat.controller.js";
 
 const userController = express.Router();
-userController.use("/:userId/chat",chatController)
-userController.get("/", authentication(), async(req, res) => {
-     
+userController.use("/:userId/chat", chatController)
+userController.get("/", authentication(), async (req, res) => {
+
   const result = await userService.getUser(req.user)
   return successResponse({ res, data: result });
 });
@@ -84,5 +84,29 @@ userController.delete(
     });
   },
 );
+userController.get("/search", authentication(), async (req, res) => {
+  console.log("SEARCH ROUTE");
+  const result = await userService.serachUser(req.query.search as string)
+  return successResponse({ res, data: result })
+})
+
+userController.get("/:id", authentication(), async (req, res) => {
+  const result = await userService.getUserById(
+    req.params.id as string
+  )
+  return successResponse({ res, data: result })
+})
+userController.patch("/update-profile", authentication(), validation(updateProfileUserSchema), async (req, res) => {
+  const result = await userService.updateUser(req.body, req.user)
+  return successResponse({ res, data: result })
+})
+userController.delete("/profile",authentication(),async (req,res)=>{
+  const result = await userService.deleteProfilePicture(req.user)
+  return successResponse({res,data:result})
+})
+userController.delete("/cover",authentication(),async (req,res)=>{
+  const result = await userService.deleteCoverPicture(req.user)
+  return successResponse({res,data:result})
+})
 
 export default userController;

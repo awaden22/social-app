@@ -2,9 +2,10 @@ import { Router, type Request, type Response } from "express";
 import { successResponse } from "../common/response/success.response.js";
 import cloudFileUpload from "../multer/multer.config.js";
 import { validation } from "../Middlewares/validation.middleware.js";
-import { createPostSchema, findPostSchema, likeandDislikeSchema, updatePostSchema } from "./post.validation.js";
+import { createPostSchema, findPostSchema, NewsFeedSchema, reactionSchema, updatePostSchema } from "./post.validation.js";
 import postService from "./post.service.js";
 import { authentication } from "../Middlewares/authentication.middleware.js";
+import type { ReactionEnums } from "../common/enums/reactions.enums.js";
 
 const postController = Router();
 
@@ -45,20 +46,34 @@ postController.patch(
   },
 );
 postController.post(
-  "/react-post/:postId",
+  "/react-post/:postId/react",
   authentication(),
  
-  validation(likeandDislikeSchema, true), 
+  validation(reactionSchema, true), 
 
   async (req: Request, res: Response) => {
     
-    const result = await postService.likeorDisklikePost(
+    const result = await postService.reactPost(
        req.params.postId as string,
-      req.query.react as string,
+     Number( req.query.react) as ReactionEnums ,
       req.user,
    
     );
     successResponse({ res, statusCode: 201, data: result });
   },
 );
+postController.delete("/delete-post/:postId",authentication(),async(req,res)=>{
+  const data = await postService.deletePost(req.params.postId as string,req.user)
+  return successResponse({res,data})
+})
+postController.get("/profile-posts", authentication(),async (req, res) => {
+  const result = await postService.profilePosts(req.user);
+  return successResponse({ res, data: result });
+});
+postController.get("/news-feed", authentication(),validation(NewsFeedSchema,true),async (req, res) => {
+  const query = req.query as unknown as { size: number; page: number; search?: string };
+  const result = await postService.newsFeed(req.user, query);
+  return successResponse({ res, data: result });
+});
+
 export default postController;

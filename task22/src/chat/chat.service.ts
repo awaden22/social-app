@@ -5,7 +5,7 @@ import type { JwtPayload } from "jsonwebtoken";
 import { Types } from "mongoose";
 import s3BuketService from "../common/S3Buket/s3.buket.service.js";
 import type { IHUser } from "../DB/Models/user.Models.js";
-import type { uploadProfileDto } from "./chat.dto.js";
+
 import chatRepo from "../DB/Repo/chat.repo.js";
 import { NotFoundException } from "../common/exceptions/domain.exception.js";
 import { ChatType } from "../common/enums/chat.enums.js";
